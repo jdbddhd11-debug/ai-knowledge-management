@@ -36,11 +36,42 @@ export async function POST(request: NextRequest) {
         },
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("分类错误:", error);
+
+    let errorMessage = "分类失败，请重试";
+    let errorDetails = "";
+
+    if (error.message?.includes("API key")) {
+      errorMessage = "OpenAI API 密钥配置错误";
+      errorDetails = "请检查 .env 文件中的 OPENAI_API_KEY 是否正确";
+    } else if (error.code === "ENOTFOUND" || error.message?.includes("fetch")) {
+      errorMessage = "网络连接失败";
+      errorDetails = "无法连接到 OpenAI API，请检查网络连接";
+    } else if (error.status === 401) {
+      errorMessage = "OpenAI API 认证失败";
+      errorDetails = "API 密钥无效或已过期";
+    } else if (error.status === 429) {
+      errorMessage = "OpenAI API 请求频率超限";
+      errorDetails = "请稍后再试或升级 API 套餐";
+    } else if (error.status === 500 || error.status === 503) {
+      errorMessage = "OpenAI API 服务异常";
+      errorDetails = "OpenAI 服务暂时不可用，请稍后重试";
+    } else if (error.message?.includes("Prisma") || error.message?.includes("database")) {
+      errorMessage = "数据库保存失败";
+      errorDetails = error.message || "请检查数据库连接";
+    } else if (error.message) {
+      errorMessage = "分类失败";
+      errorDetails = error.message;
+    }
+
     return NextResponse.json(
-      { error: "分类失败，请重试" },
-      { status: 500 }
+      {
+        error: errorMessage,
+        details: errorDetails,
+        type: error.code || error.status || "unknown"
+      },
+      { status: error.status || 500 }
     );
   }
 }

@@ -6,18 +6,18 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<{ message: string; details?: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!content.trim()) {
-      setError("请输入内容");
+      setError({ message: "请输入内容" });
       return;
     }
 
     setLoading(true);
-    setError("");
+    setError(null);
     setResult(null);
 
     try {
@@ -35,7 +35,11 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "分类失败");
+        throw {
+          message: data.error || "分类失败",
+          details: data.details,
+          type: data.type
+        };
       }
 
       setResult(data);
@@ -45,7 +49,17 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
         onSuccess();
       }
     } catch (err: any) {
-      setError(err.message || "提交失败，请重试");
+      if (err.message === "Failed to fetch") {
+        setError({
+          message: "网络请求失败",
+          details: "无法连接到服务器，请检查开发服务器是否正在运行"
+        });
+      } else {
+        setError({
+          message: err.message || "提交失败，请重试",
+          details: err.details
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -79,8 +93,18 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
       </form>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-          {error}
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start gap-2">
+            <svg className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <div className="flex-1">
+              <p className="font-semibold text-red-900">{error.message}</p>
+              {error.details && (
+                <p className="mt-1 text-sm text-red-700">{error.details}</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
