@@ -17,5 +17,12 @@ Content Type: ${contentType}
 Content: ${content}
 
 Classify this content into one of the five categories and explain your reasoning.
+
+Respond in JSON format:
+{
+  "category": "arbitrary|opinion|process|procedure|concrete",
+  "confidence": 0.0-1.0,
+  "reasoning": "brief explanation"
+}
 `;
 }

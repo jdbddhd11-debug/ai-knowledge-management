@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI Knowledge Management",
-  description: "AI-powered knowledge classification system",
+  title: "AI 知识管理系统",
+  description: "基于 Scott Young 五类信息理论的 AI 知识分类系统",
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
