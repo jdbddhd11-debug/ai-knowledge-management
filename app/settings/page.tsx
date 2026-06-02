@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 export default function SettingsPage() {
@@ -10,6 +10,65 @@ export default function SettingsPage() {
   const [preset, setPreset] = useState("");
   const [temperature, setTemperature] = useState(0.7);
   const [showKey, setShowKey] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  // 加载设置
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      const response = await fetch("/api/settings");
+      if (response.ok) {
+        const data = await response.json();
+        setProxyUrl(data.proxyUrl || "");
+        setApiKey(data.apiKey || "");
+        setModel(data.model || "gpt-4o-mini");
+        setTemperature(data.temperature ?? 0.7);
+      }
+    } catch (error) {
+      console.error("加载设置失败:", error);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!apiKey.trim()) {
+      setMessage("请输入API密钥");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proxyUrl: proxyUrl.trim() || null,
+          apiKey: apiKey.trim(),
+          model: model.trim() || "gpt-4o-mini",
+          temperature
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage("设置保存成功！");
+        setTimeout(() => setMessage(""), 3000);
+      } else {
+        setMessage(data.error || "保存失败");
+      }
+    } catch (error) {
+      setMessage("保存失败，请重试");
+      console.error("保存设置失败:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#FDFBF7]">
@@ -212,10 +271,19 @@ export default function SettingsPage() {
           {/* 保存按钮 */}
           <button
             type="button"
-            className="w-full px-6 py-5 bg-gradient-to-r from-[#FFB6C1] to-[#87CEEB] text-white font-semibold rounded-[16px] hover:shadow-lg hover:scale-[1.02] transition-all"
+            onClick={handleSave}
+            disabled={loading}
+            className="w-full px-6 py-5 bg-gradient-to-r from-[#FFB6C1] to-[#87CEEB] text-white font-semibold rounded-[16px] hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            保存设置
+            {loading ? "保存中..." : "保存设置"}
           </button>
+
+          {/* 提示消息 */}
+          {message && (
+            <div className={`text-center text-sm font-medium ${message.includes("成功") ? "text-green-600" : "text-red-600"}`}>
+              {message}
+            </div>
+          )}
         </div>
       </main>
     </div>

@@ -15,19 +15,20 @@ export async function classifyContent(
   content: string,
   contentType: string
 ): Promise<ClassificationResult> {
-  const { getOpenAIClient } = await import("./client");
+  const { getOpenAIClient, getAISettings } = await import("./client");
   const { CLASSIFICATION_SYSTEM_PROMPT, buildClassificationPrompt } = await import("../../prompts/classification");
 
-  const openai = getOpenAIClient();
+  const openai = await getOpenAIClient();
+  const aiSettings = await getAISettings();
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: aiSettings.model,
     messages: [
       { role: "system", content: CLASSIFICATION_SYSTEM_PROMPT },
       { role: "user", content: buildClassificationPrompt(content, contentType) }
     ],
     response_format: { type: "json_object" },
-    temperature: 0.3,
+    temperature: aiSettings.temperature,
   });
 
   const result = JSON.parse(completion.choices[0].message.content || "{}");
