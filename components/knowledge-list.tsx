@@ -54,6 +54,28 @@ export function KnowledgeList({ refresh }: { refresh?: number }) {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm("确定要删除这条知识吗？")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/knowledge?id=${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "删除失败");
+      }
+
+      await fetchKnowledge();
+    } catch (err: any) {
+      alert(err.message || "删除失败");
+    }
+  };
+
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -95,9 +117,18 @@ export function KnowledgeList({ refresh }: { refresh?: number }) {
             {groupedData[category].map((item) => (
               <div
                 key={item.id}
-                className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow group"
               >
-                <p className="text-gray-800 whitespace-pre-wrap">{item.content}</p>
+                <div className="flex justify-between items-start gap-3">
+                  <p className="text-gray-800 whitespace-pre-wrap flex-1">{item.content}</p>
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded-md border border-red-200 hover:border-red-300"
+                    title="删除"
+                  >
+                    删除
+                  </button>
+                </div>
                 <p className="mt-2 text-xs text-gray-500">
                   {new Date(item.createdAt).toLocaleString("zh-CN")}
                 </p>
