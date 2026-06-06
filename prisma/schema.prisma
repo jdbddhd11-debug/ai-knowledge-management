@@ -7,13 +7,26 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model Space {
+  id             String          @id @default(cuid())
+  name           String
+  description    String?
+  spaceType      String          @default("topic")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  knowledgeItems KnowledgeItem[]
+}
 
 model KnowledgeItem {
   id        String   @id @default(cuid())
   type      String
   content   String
+  spaceId   String?
+  space     Space?   @relation(fields: [spaceId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([spaceId])
 }
 
 model ApiSettings {

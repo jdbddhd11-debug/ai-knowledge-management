@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { classifyContent } from "@/lib/ai/classifier";
+import { suggestSpace } from "@/lib/ai/space-suggester";
 import { prisma } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { content, contentType = "text" } = body;
+    const { content, contentType = "text", title } = body;
 
     if (!content) {
       return NextResponse.json(
@@ -14,8 +15,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 分类内容
     const classification = await classifyContent(content, contentType);
 
+    // 推荐 Space
+    const spaceSuggestion = await suggestSpace(content, title);
+
+    // 保存到数据库
     const knowledgeItem = await prisma.knowledgeItem.create({
       data: {
         type: classification.category,
@@ -33,6 +39,12 @@ export async function POST(request: NextRequest) {
           category: classification.category,
           confidence: classification.confidence,
           reasoning: classification.reasoning,
+        },
+        spaceSuggestion: {
+          suggestedSpaceName: spaceSuggestion.suggestedSpaceName,
+          spaceType: spaceSuggestion.spaceType,
+          reason: spaceSuggestion.reason,
+          confidence: spaceSuggestion.confidence,
         },
       },
     });
