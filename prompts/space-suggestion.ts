@@ -22,7 +22,7 @@ Ask yourself:
 - 0.0-0.3: Cannot categorize - content is too vague or doesn't fit any Space
 
 **Output Requirements:**
-1. Respond ONLY with valid JSON, no additional text
+1. Respond ONLY with valid JSON, no additional text, no markdown code blocks, no explanations
 2. suggestedSpaceName should be concise (2-6 words)
 3. If confidence < 0.4, set suggestedSpaceName to null
 4. reason should be brief (under 50 characters)

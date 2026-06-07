@@ -1,10 +1,39 @@
 import { SPACE_SUGGESTION_SYSTEM_PROMPT, SPACE_SUGGESTION_USER_PROMPT } from '@/prompts/space-suggestion';
+import { callAI } from './client';
 
 export interface SpaceSuggestion {
   suggestedSpaceName: string | null;
   spaceType: 'PROJECT' | 'GOAL' | 'QUESTION' | 'LEARNING_TOPIC' | 'KEYWORD' | null;
   reason: string;
   confidence: number;
+}
+
+// 提取 JSON 内容的辅助函数
+function extractJSON(text: string): string {
+  console.log('[SpaceSuggester] AI 原始返回:', text);
+
+  let jsonStr = text.trim();
+
+  // 1. 尝试匹配 ```json ... ``` 代码块
+  const jsonBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonBlockMatch) {
+    jsonStr = jsonBlockMatch[1].trim();
+    console.log('[SpaceSuggester] 从代码块提取 JSON');
+  }
+
+  // 2. 如果没有代码块，尝试找到第一个 { 和最后一个 }
+  if (!jsonStr.startsWith('{')) {
+    const firstBrace = jsonStr.indexOf('{');
+    const lastBrace = jsonStr.lastIndexOf('}');
+
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+      console.log('[SpaceSuggester] 从文本中提取 JSON');
+    }
+  }
+
+  console.log('[SpaceSuggester] 提取后的 JSON:', jsonStr);
+  return jsonStr;
 }
 
 export async function suggestSpace(
@@ -19,41 +48,30 @@ export async function suggestSpace(
   };
 
   try {
-    const response = await fetch('http://localhost:3000/api/ai/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messages: [
-          { role: 'system', content: SPACE_SUGGESTION_SYSTEM_PROMPT },
-          { role: 'user', content: SPACE_SUGGESTION_USER_PROMPT(title || 'Untitled', content) },
-        ],
-        temperature: 0.3,
-      }),
-    });
-
-    if (!response.ok) {
-      console.error('AI API error:', response.status);
-      return defaultResult;
-    }
-
-    const data = await response.json();
-    const aiContent = data.content;
+    const aiContent = await callAI(
+      [
+        { role: 'system', content: SPACE_SUGGESTION_SYSTEM_PROMPT },
+        { role: 'user', content: SPACE_SUGGESTION_USER_PROMPT(title || 'Untitled', content) },
+      ],
+      { temperature: 0.3 }
+    );
 
     if (!aiContent) {
-      console.error('No content in AI response:', data);
+      console.error('[SpaceSuggester] No content in AI response');
       return defaultResult;
     }
 
-    // 提取 JSON（AI 可能返回带 markdown 代码块的）
-    let jsonStr = aiContent.trim();
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim();
-    }
+    // 提取并解析 JSON
+    const jsonStr = extractJSON(aiContent);
 
-    const parsed = JSON.parse(jsonStr);
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (error) {
+      console.error('[SpaceSuggester] JSON 解析失败:', error);
+      console.error('[SpaceSuggester] 尝试解析的内容:', jsonStr.substring(0, 200));
+      return defaultResult;
+    }
 
     return {
       suggestedSpaceName: parsed.suggestedSpaceName || null,
@@ -62,7 +80,7 @@ export async function suggestSpace(
       confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
     };
   } catch (error) {
-    console.error('suggestSpace error:', error);
+    console.error('[SpaceSuggester] suggestSpace error:', error);
     return defaultResult;
   }
 }
