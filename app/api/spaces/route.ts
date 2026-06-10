@@ -9,7 +9,7 @@ export async function GET() {
       },
       include: {
         _count: {
-          select: { knowledgeItems: true },
+          select: { items: true },
         },
       },
     });

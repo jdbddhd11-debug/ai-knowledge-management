@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 
 interface Space {
@@ -14,45 +14,75 @@ interface Space {
   };
 }
 
-export default function NewKnowledgePage() {
+interface KnowledgeItem {
+  id: string;
+  title: string | null;
+  content: string;
+  type: string;
+  spaces: Space[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export default function EditKnowledgePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const params = useParams();
+  const knowledgeId = params.id as string;
+
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [type, setType] = useState("");
   const [spaceIds, setSpaceIds] = useState<string[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [isClassifying, setIsClassifying] = useState(false);
   const [showNewSpaceDialog, setShowNewSpaceDialog] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState("");
   const [newSpaceType, setNewSpaceType] = useState("topic");
   const [newSpaceDescription, setNewSpaceDescription] = useState("");
+  const [error, setError] = useState("");
 
-  // 加载 Spaces 并处理 URL 参数
   useEffect(() => {
+    fetchKnowledge();
     fetchSpaces();
+  }, [knowledgeId]);
 
-    // 从 URL 参数中获取 spaceId 并自动选中
-    const urlSpaceId = searchParams.get("spaceId");
-    if (urlSpaceId) {
-      setSpaceIds([urlSpaceId]);
-    }
-  }, [searchParams]);
-
-  const fetchSpaces = async () => {
+  const fetchKnowledge = async () => {
     try {
-      const response = await fetch("/api/spaces");
-      const data = await response.json();
-      if (data.success) {
-        setSpaces(data.data);
+      const res = await fetch(`/api/knowledge/${knowledgeId}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "获取知识失败");
       }
-    } catch (error) {
-      console.error("加载 Spaces 失败:", error);
+
+      if (data.success) {
+        const item: KnowledgeItem = data.data;
+        setTitle(item.title || "");
+        setContent(item.content);
+        setType(item.type);
+        setSpaceIds(item.spaces.map(s => s.id));
+      }
+    } catch (err: any) {
+      setError(err.message || "获取知识失败");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // AI 智能分类
+  const fetchSpaces = async () => {
+    try {
+      const res = await fetch("/api/spaces");
+      const data = await res.json();
+      if (data.success) {
+        setSpaces(data.data);
+      }
+    } catch (err) {
+      console.error("加载 Spaces 失败:", err);
+    }
+  };
+
   const handleAIClassify = async () => {
     if (!content.trim()) {
       alert("请先输入内容");
@@ -61,29 +91,25 @@ export default function NewKnowledgePage() {
 
     setIsClassifying(true);
     try {
-      const response = await fetch("/api/classify-only", {
+      const res = await fetch("/api/classify-only", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content }),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (!response.ok) {
+      if (!res.ok) {
         throw new Error(data.details || data.error || "分类失败");
       }
 
       if (data.success) {
-        // 自动填充分类 - API 直接返回 classification
         if (data.classification?.category) {
           setType(data.classification.category);
         }
 
-        // 如果 AI 推荐了 Space 且置信度高，自动选中或提示创建
         if (data.spaceSuggestion && data.spaceSuggestion.confidence > 0.7) {
           const suggestedName = data.spaceSuggestion.suggestedSpaceName;
-
-          // 查找是否已存在该 Space
           const existingSpace = spaces.find(
             (s) => s.name.toLowerCase() === suggestedName.toLowerCase()
           );
@@ -107,18 +133,16 @@ export default function NewKnowledgePage() {
             }
           }
         } else {
-          // 置信度不高，只显示分类结果
           alert(`✨ AI 分类完成！\n信息类型: ${data.classification.category}`);
         }
       }
-    } catch (error: any) {
-      alert(`分类失败: ${error.message}`);
+    } catch (err: any) {
+      alert(`分类失败: ${err.message}`);
     } finally {
       setIsClassifying(false);
     }
   };
 
-  // 创建新 Space
   const handleCreateSpace = async () => {
     if (!newSpaceName.trim()) {
       alert("请输入 Space 名称");
@@ -126,7 +150,7 @@ export default function NewKnowledgePage() {
     }
 
     try {
-      const response = await fetch("/api/spaces", {
+      const res = await fetch("/api/spaces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -136,30 +160,26 @@ export default function NewKnowledgePage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (!response.ok) {
+      if (!res.ok) {
         throw new Error(data.error || "创建 Space 失败");
       }
 
       if (data.success) {
-        // 刷新 Spaces 列表
         await fetchSpaces();
-        // 自动选中新创建的 Space
-        setSpaceIds([data.data.id]);
-        // 关闭对话框并重置
+        setSpaceIds([...spaceIds, data.data.id]);
         setShowNewSpaceDialog(false);
         setNewSpaceName("");
         setNewSpaceType("topic");
         setNewSpaceDescription("");
         alert("Space 创建成功！");
       }
-    } catch (error: any) {
-      alert(`创建失败: ${error.message}`);
+    } catch (err: any) {
+      alert(`创建失败: ${err.message}`);
     }
   };
 
-  // 保存知识项
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -173,10 +193,10 @@ export default function NewKnowledgePage() {
       return;
     }
 
-    setIsLoading(true);
+    setIsSaving(true);
     try {
-      const response = await fetch("/api/knowledge", {
-        method: "POST",
+      const res = await fetch(`/api/knowledge/${knowledgeId}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
@@ -186,26 +206,69 @@ export default function NewKnowledgePage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || "保存失败");
+      if (!res.ok) {
+        throw new Error(data.error || "更新失败");
       }
 
       if (data.success) {
-        alert("知识项保存成功！");
+        alert("更新成功！");
         router.push("/");
       }
-    } catch (error: any) {
-      alert(`保存失败: ${error.message}`);
+    } catch (err: any) {
+      alert(`更新失败: ${err.message}`);
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
+  const handleDelete = async () => {
+    if (!confirm("确定要删除这条知识吗？")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/knowledge/${knowledgeId}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        alert("删除成功！");
+        router.push("/");
+      } else {
+        throw new Error(data.error || "删除失败");
+      }
+    } catch (err: any) {
+      alert(`删除失败: ${err.message}`);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">加载中...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error}</p>
+          <Link href="/" className="text-blue-600 hover:text-blue-700 underline">
+            返回首页
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 导航栏 */}
       <nav className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -213,32 +276,20 @@ export default function NewKnowledgePage() {
               href="/"
               className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                />
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
               返回首页
             </Link>
-            <h1 className="text-xl font-bold text-gray-900">添加知识</h1>
+            <h1 className="text-xl font-bold text-gray-900">编辑知识</h1>
             <div className="w-20"></div>
           </div>
         </div>
       </nav>
 
-      {/* 主内容 */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* 标题 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 标题（可选）
@@ -252,7 +303,6 @@ export default function NewKnowledgePage() {
               />
             </div>
 
-            {/* 内容 + AI 按钮 */}
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="block text-sm font-medium text-gray-700">
@@ -276,12 +326,9 @@ export default function NewKnowledgePage() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
                 required
               />
-              <p className="mt-2 text-xs text-gray-500">
-                支持 Markdown 格式
-              </p>
+              <p className="mt-2 text-xs text-gray-500">支持 Markdown 格式</p>
             </div>
 
-            {/* 信息类型 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 信息类型 *
@@ -301,7 +348,6 @@ export default function NewKnowledgePage() {
               </select>
             </div>
 
-            {/* Space 选择 + 新建按钮 */}
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="block text-sm font-medium text-gray-700">
@@ -349,18 +395,24 @@ export default function NewKnowledgePage() {
               </div>
             </div>
 
-            {/* 提交按钮 */}
             <div className="flex gap-4 pt-4">
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isSaving}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-medium rounded-lg hover:shadow-lg hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                {isLoading ? "保存中..." : "保存"}
+                {isSaving ? "保存中..." : "保存更改"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
+              >
+                删除
               </button>
               <Link
                 href="/"
-                className="px-6 py-3 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-colors"
+                className="px-6 py-3 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center"
               >
                 取消
               </Link>
@@ -369,7 +421,6 @@ export default function NewKnowledgePage() {
         </div>
       </main>
 
-      {/* 新建 Space 对话框 */}
       {showNewSpaceDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
@@ -444,4 +495,3 @@ export default function NewKnowledgePage() {
     </div>
   );
 }
-
