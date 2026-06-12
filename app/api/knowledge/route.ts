@@ -1,9 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 export async function GET() {
   try {
+    // 获取当前用户 session
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
+
     const items = await prisma.knowledgeItem.findMany({
+      where: {
+        userId: userId,
+      },
       include: {
         spaces: {
           include: {
@@ -83,6 +98,16 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // 获取当前用户 session
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
     const body = await request.json();
     const { title, content, type, spaceIds } = body;
 
@@ -98,6 +123,7 @@ export async function POST(request: Request) {
         title: title || null,
         type,
         content,
+        userId: userId,
         spaces: spaceIds && spaceIds.length > 0
           ? {
               create: spaceIds.map((spaceId: string) => ({
@@ -135,6 +161,16 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    // 获取当前用户 session
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
@@ -142,6 +178,18 @@ export async function DELETE(request: Request) {
       return NextResponse.json(
         { error: "缺少 ID 参数" },
         { status: 400 }
+      );
+    }
+
+    // 验证知识项是否属于当前用户
+    const item = await prisma.knowledgeItem.findUnique({
+      where: { id },
+    });
+
+    if (!item || item.userId !== userId) {
+      return NextResponse.json(
+        { error: "无权删除此知识项" },
+        { status: 403 }
       );
     }
 

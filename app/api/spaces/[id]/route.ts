@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    // 获取当前用户 session
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
+
     const space = await prisma.space.findUnique({
       where: { id: params.id },
       include: {
@@ -19,6 +31,14 @@ export async function GET(
       return NextResponse.json(
         { error: "Space 不存在" },
         { status: 404 }
+      );
+    }
+
+    // 验证 Space 是否属于当前用户
+    if (space.userId !== userId) {
+      return NextResponse.json(
+        { error: "无权访问此 Space" },
+        { status: 403 }
       );
     }
 
@@ -40,6 +60,16 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    // 获取当前用户 session
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
     const body = await request.json();
     const { name, description, spaceType } = body;
 
@@ -47,6 +77,18 @@ export async function PUT(
       return NextResponse.json(
         { error: "Space 名称不能为空" },
         { status: 400 }
+      );
+    }
+
+    // 验证 Space 是否属于当前用户
+    const existingSpace = await prisma.space.findUnique({
+      where: { id: params.id },
+    });
+
+    if (!existingSpace || existingSpace.userId !== userId) {
+      return NextResponse.json(
+        { error: "无权修改此 Space" },
+        { status: 403 }
       );
     }
 
@@ -77,6 +119,29 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    // 获取当前用户 session
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
+
+    // 验证 Space 是否属于当前用户
+    const existingSpace = await prisma.space.findUnique({
+      where: { id: params.id },
+    });
+
+    if (!existingSpace || existingSpace.userId !== userId) {
+      return NextResponse.json(
+        { error: "无权删除此 Space" },
+        { status: 403 }
+      );
+    }
+
     // 删除 Space（级联删除会自动将关联的 knowledgeItems 的 spaceId 设为 null）
     await prisma.space.delete({
       where: { id: params.id },

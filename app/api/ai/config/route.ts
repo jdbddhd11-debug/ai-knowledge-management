@@ -1,14 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { clearAIConfigCache } from '@/lib/ai/client';
+import { getSession } from '@/lib/auth';
 
-// GET - 获取当前激活的配置（不返回完整 apiKey）
+// GET - 获取当前用户的激活配置（不返回完整 apiKey）
 export async function GET(request: NextRequest) {
   try {
-    const settings = await prisma.apiSettings.findFirst({
-      where: { isActive: true },
+    // 获取当前用户 session
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
+
+    // 优先查找用户级别的配置
+    const userConfig = await prisma.aIConfig.findFirst({
+      where: {
+        userId: userId,
+        isActive: true
+      },
       orderBy: { updatedAt: 'desc' }
     });
+
+    // 如果用户没有配置，回退到全局配置
+    let settings = userConfig;
+    if (!settings) {
+      const globalSettings = await prisma.apiSettings.findFirst({
+        where: { isActive: true },
+        orderBy: { updatedAt: 'desc' }
+      });
+
+      if (globalSettings) {
+        // 转换全局配置格式
+        return NextResponse.json({
+          proxyUrl: globalSettings.proxyUrl || '',
+          apiKey: globalSettings.apiKey.length > 10
+            ? `${globalSettings.apiKey.substring(0, 6)}****${globalSettings.apiKey.substring(globalSettings.apiKey.length - 4)}`
+            : '******',
+          model: globalSettings.model,
+          temperature: globalSettings.temperature,
+          isConfigured: true,
+          isGlobal: true,
+        });
+      }
+    }
 
     if (!settings) {
       return NextResponse.json({
@@ -31,6 +70,7 @@ export async function GET(request: NextRequest) {
       model: settings.model,
       temperature: settings.temperature,
       isConfigured: true,
+      isGlobal: false,
     });
   } catch (error) {
     console.error('获取 AI 配置失败:', error);
@@ -41,9 +81,19 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - 保存配置
+// POST - 保存用户级别配置
 export async function POST(request: NextRequest) {
   try {
+    // 获取当前用户 session
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
     const body = await request.json();
     const { proxyUrl, apiKey, model, temperature } = body;
 
@@ -63,19 +113,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 先将所有配置设为非激活
-    await prisma.apiSettings.updateMany({
+    // 先将该用户的所有配置设为非激活
+    await prisma.aIConfig.updateMany({
+      where: { userId: userId },
       data: { isActive: false }
     });
 
     // 创建新配置
-    const newSettings = await prisma.apiSettings.create({
+    const newConfig = await prisma.aIConfig.create({
       data: {
-        proxyUrl: proxyUrl || null,
+        proxyUrl: proxyUrl || '',
         apiKey,
         model,
         temperature,
         isActive: true,
+        userId: userId,
       }
     });
 
@@ -85,7 +137,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: '配置保存成功',
-      id: newSettings.id,
+      id: newConfig.id,
     });
   } catch (error) {
     console.error('保存 AI 配置失败:', error);

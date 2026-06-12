@@ -7,32 +7,68 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model Space {
-  id          String           @id @default(cuid())
-  name        String
-  description String?
-  spaceType   String           @default("topic")
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  items       KnowledgeSpace[]
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String?
+  name      String?
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  knowledgeItems KnowledgeItem[]
+  spaces         Space[]
+  aiConfigs      AIConfig[]
 }
 
 model KnowledgeItem {
-  id        String           @id @default(cuid())
+  id        String   @id @default(cuid())
   title     String?
-  type      String
   content   String
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  spaces    KnowledgeSpace[]
+  type      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  spaces KnowledgeSpace[]
+}
+
+model Space {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  spaceType   String   @default("topic")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  items KnowledgeSpace[]
+}
+
+model AIConfig {
+  id          String   @id @default(cuid())
+  proxyUrl    String
+  apiKey      String
+  model       String
+  temperature Float    @default(0.7)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 }
 
 model KnowledgeSpace {
   knowledgeId String
   spaceId     String
-  knowledge   KnowledgeItem @relation(fields: [knowledgeId], references: [id], onDelete: Cascade)
-  space       Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  createdAt   DateTime      @default(now())
+
+  knowledge KnowledgeItem @relation(fields: [knowledgeId], references: [id], onDelete: Cascade)
+  space     Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
   @@id([knowledgeId, spaceId])
 }

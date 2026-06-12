@@ -18,11 +18,87 @@ export default function Home() {
       <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* API设置快捷按钮 */}
-        <div className="mb-6">
+        {/* 导航栏 */}
+        <div className="mb-6 flex flex-wrap gap-3">
+          <Link
+            href="/knowledge/new"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-medium rounded-lg hover:shadow-lg hover:scale-105 transition-all"
+          >
+            <span>➕</span>
+            <span>新建知识</span>
+          </Link>
+
+          <Link
+            href="/spaces"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium rounded-lg hover:shadow-lg hover:scale-105 transition-all"
+          >
+            <span>🏷️</span>
+            <span>Space 管理</span>
+          </Link>
+
+          <button
+            onClick={async () => {
+              if (!confirm('确定要对所有未分类知识进行批量归纳吗？\n\nAI 将为每个未分类的知识项推荐合适的 Space。')) return;
+
+              try {
+                // 获取所有未分类的知识
+                const res = await fetch('/api/knowledge');
+                const data = await res.json();
+
+                if (!data.success) throw new Error(data.error);
+
+                const unorganized = data.data.items.filter((item: any) => !item.spaces || item.spaces.length === 0);
+
+                if (unorganized.length === 0) {
+                  alert('没有未分类的知识项！所有知识都已归类。');
+                  return;
+                }
+
+                const confirmMsg = `找到 ${unorganized.length} 个未分类知识项，确定开始处理吗？\n\n这可能需要一些时间...`;
+                if (!confirm(confirmMsg)) return;
+
+                // 开始处理
+                const organizeRes = await fetch('/api/spaces/auto-organize', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    entries: unorganized.map((item: any) => ({
+                      id: item.id,
+                      title: item.title || '',
+                      content: item.content
+                    }))
+                  })
+                });
+
+                const organizeData = await organizeRes.json();
+
+                if (!organizeData.success) throw new Error(organizeData.error);
+
+                const summary = organizeData.summary;
+                alert(
+                  `批量归纳完成！\n\n` +
+                  `总数：${summary.total}\n` +
+                  `成功：${summary.success}\n` +
+                  `失败：${summary.failed}\n\n` +
+                  `请查看控制台了解详细建议。`
+                );
+
+                console.log('AI 归纳建议:', organizeData.suggestions);
+                setRefreshKey(prev => prev + 1);
+              } catch (error) {
+                console.error('批量归纳失败:', error);
+                alert(`批量归纳失败：${error instanceof Error ? error.message : '未知错误'}`);
+              }
+            }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-medium rounded-lg hover:shadow-lg hover:scale-105 transition-all"
+          >
+            <span>🤖</span>
+            <span>AI 批量归纳</span>
+          </button>
+
           <Link
             href="/settings"
-            className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#FFB6C1] to-[#87CEEB] text-white font-medium rounded-lg hover:shadow-lg hover:scale-105 transition-all"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#FFB6C1] to-[#87CEEB] text-white font-medium rounded-lg hover:shadow-lg hover:scale-105 transition-all"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />

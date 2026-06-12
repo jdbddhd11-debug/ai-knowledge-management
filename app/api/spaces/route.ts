@@ -1,9 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 export async function GET() {
   try {
+    // 获取当前用户 session
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
+
     const spaces = await prisma.space.findMany({
+      where: {
+        userId: userId,
+      },
       orderBy: {
         createdAt: "desc",
       },
@@ -29,6 +44,16 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // 获取当前用户 session
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
     const body = await request.json();
     const { name, description, spaceType } = body;
 
@@ -44,6 +69,7 @@ export async function POST(request: Request) {
         name,
         description: description || null,
         spaceType: spaceType || "topic",
+        userId: userId,
       },
     });
 
