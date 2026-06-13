@@ -2,9 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { classifyContent } from "@/lib/ai/classifier";
 import { suggestSpace } from "@/lib/ai/space-suggester";
 import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
+    // 验证用户登录
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
     const body = await request.json();
     const { content, contentType = "text", title } = body;
 
@@ -26,6 +37,7 @@ export async function POST(request: NextRequest) {
       data: {
         type: classification.category,
         content: content,
+        userId: userId,
       },
     });
 

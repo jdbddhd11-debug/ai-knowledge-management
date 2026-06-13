@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { suggestSpace } from "@/lib/ai/space-suggester";
+import { getSession } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
+    // 验证用户登录
+    const session = await getSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "未登录" },
+        { status: 401 }
+      );
+    }
+
     const { entries } = await req.json();
 
     if (!entries || !Array.isArray(entries)) {
@@ -18,6 +28,14 @@ export async function POST(req: NextRequest) {
         suggestions: [],
         message: "没有需要整理的知识项",
       });
+    }
+
+    // 限制批量处理数量
+    if (entries.length > 20) {
+      return NextResponse.json(
+        { error: "单次最多处理 20 条知识项" },
+        { status: 400 }
+      );
     }
 
     // 为每个 entry 获取 Space 建议

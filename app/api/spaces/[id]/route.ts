@@ -4,9 +4,10 @@ import { getSession } from "@/lib/auth";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // 获取当前用户 session
     const session = await getSession();
     if (!session || !session.user) {
@@ -19,7 +20,7 @@ export async function GET(
     const userId = session.user.id;
 
     const space = await prisma.space.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         _count: {
           select: { items: true },
@@ -57,9 +58,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // 获取当前用户 session
     const session = await getSession();
     if (!session || !session.user) {
@@ -82,7 +84,7 @@ export async function PUT(
 
     // 验证 Space 是否属于当前用户
     const existingSpace = await prisma.space.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!existingSpace || existingSpace.userId !== userId) {
@@ -93,7 +95,7 @@ export async function PUT(
     }
 
     const space = await prisma.space.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         name,
         description: description || null,
@@ -116,9 +118,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // 获取当前用户 session
     const session = await getSession();
     if (!session || !session.user) {
@@ -132,7 +135,7 @@ export async function DELETE(
 
     // 验证 Space 是否属于当前用户
     const existingSpace = await prisma.space.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!existingSpace || existingSpace.userId !== userId) {
@@ -144,7 +147,7 @@ export async function DELETE(
 
     // 删除 Space（级联删除会自动将关联的 knowledgeItems 的 spaceId 设为 null）
     await prisma.space.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json({

@@ -5,12 +5,103 @@ import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { UploadForm } from "@/components/upload-form";
 import { KnowledgeList } from "@/components/knowledge-list";
+import { SuggestionsModal, Suggestion } from "@/components/suggestions-modal";
 
 export default function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
+  const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleUploadSuccess = () => {
     setRefreshKey((prev) => prev + 1);
+  };
+
+  const handleAutoOrganize = async () => {
+    if (!confirm('确定要对所有未分类知识进行批量归纳吗？\n\nAI 将为每个未分类的知识项推荐合适的 Space。')) return;
+
+    setIsProcessing(true);
+    try {
+      // 获取所有未分类的知识
+      const res = await fetch('/api/knowledge');
+      const data = await res.json();
+
+      if (!data.success) throw new Error(data.error);
+
+      const unorganized = data.data.items.filter((item: any) => !item.spaces || item.spaces.length === 0);
+
+      if (unorganized.length === 0) {
+        alert('没有未分类的知识项！所有知识都已归类。');
+        return;
+      }
+
+      // 限制最多20条
+      const toProcess = unorganized.slice(0, 20);
+      if (unorganized.length > 20) {
+        const confirmMsg = `找到 ${unorganized.length} 个未分类知识项，单次最多处理 20 条。\n\n将处理前 20 条，确定继续吗？`;
+        if (!confirm(confirmMsg)) return;
+      }
+
+      // 开始处理
+      const organizeRes = await fetch('/api/spaces/auto-organize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entries: toProcess.map((item: any) => ({
+            id: item.id,
+            title: item.title || '',
+            content: item.content
+          }))
+        })
+      });
+
+      const organizeData = await organizeRes.json();
+
+      if (!organizeData.success) throw new Error(organizeData.error);
+
+      // 转换为 Suggestion 格式
+      const formattedSuggestions: Suggestion[] = organizeData.suggestions.map((s: any) => ({
+        id: s.id,
+        title: toProcess.find((item: any) => item.id === s.id)?.title || '无标题',
+        suggestion: s.suggestion,
+        error: s.error,
+      }));
+
+      setSuggestions(formattedSuggestions);
+    } catch (error) {
+      console.error('批量归纳失败:', error);
+      alert(`批量归纳失败：${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleApplySuggestions = async (
+    selected: Array<{ knowledgeItemId: string; spaceName: string; spaceType: string }>
+  ) => {
+    try {
+      const res = await fetch('/api/spaces/apply-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suggestions: selected })
+      });
+
+      const data = await res.json();
+
+      if (!data.success) throw new Error(data.error);
+
+      alert(
+        `应用完成！\n\n` +
+        `总数：${data.summary.total}\n` +
+        `成功：${data.summary.success}\n` +
+        `失败：${data.summary.failed}`
+      );
+
+      setSuggestions(null);
+      setRefreshKey(prev => prev + 1);
+    } catch (error) {
+      console.error('应用建议失败:', error);
+      alert(`应用建议失败：${error instanceof Error ? error.message : '未知错误'}`);
+    }
   };
 
   return (
@@ -37,63 +128,12 @@ export default function Home() {
           </Link>
 
           <button
-            onClick={async () => {
-              if (!confirm('确定要对所有未分类知识进行批量归纳吗？\n\nAI 将为每个未分类的知识项推荐合适的 Space。')) return;
-
-              try {
-                // 获取所有未分类的知识
-                const res = await fetch('/api/knowledge');
-                const data = await res.json();
-
-                if (!data.success) throw new Error(data.error);
-
-                const unorganized = data.data.items.filter((item: any) => !item.spaces || item.spaces.length === 0);
-
-                if (unorganized.length === 0) {
-                  alert('没有未分类的知识项！所有知识都已归类。');
-                  return;
-                }
-
-                const confirmMsg = `找到 ${unorganized.length} 个未分类知识项，确定开始处理吗？\n\n这可能需要一些时间...`;
-                if (!confirm(confirmMsg)) return;
-
-                // 开始处理
-                const organizeRes = await fetch('/api/spaces/auto-organize', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    entries: unorganized.map((item: any) => ({
-                      id: item.id,
-                      title: item.title || '',
-                      content: item.content
-                    }))
-                  })
-                });
-
-                const organizeData = await organizeRes.json();
-
-                if (!organizeData.success) throw new Error(organizeData.error);
-
-                const summary = organizeData.summary;
-                alert(
-                  `批量归纳完成！\n\n` +
-                  `总数：${summary.total}\n` +
-                  `成功：${summary.success}\n` +
-                  `失败：${summary.failed}\n\n` +
-                  `请查看控制台了解详细建议。`
-                );
-
-                console.log('AI 归纳建议:', organizeData.suggestions);
-                setRefreshKey(prev => prev + 1);
-              } catch (error) {
-                console.error('批量归纳失败:', error);
-                alert(`批量归纳失败：${error instanceof Error ? error.message : '未知错误'}`);
-              }
-            }}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-medium rounded-lg hover:shadow-lg hover:scale-105 transition-all"
+            onClick={handleAutoOrganize}
+            disabled={isProcessing}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-medium rounded-lg hover:shadow-lg hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
             <span>🤖</span>
-            <span>AI 批量归纳</span>
+            <span>{isProcessing ? '处理中...' : 'AI 批量归纳'}</span>
           </button>
 
           <Link
@@ -162,6 +202,15 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {/* Suggestions Modal */}
+      {suggestions && (
+        <SuggestionsModal
+          suggestions={suggestions}
+          onClose={() => setSuggestions(null)}
+          onApply={handleApplySuggestions}
+        />
+      )}
     </div>
   );
 }

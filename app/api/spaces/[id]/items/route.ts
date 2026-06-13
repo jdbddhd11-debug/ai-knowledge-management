@@ -3,11 +3,12 @@ import { prisma } from "@/lib/db";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const knowledgeSpaces = await prisma.knowledgeSpace.findMany({
-      where: { spaceId: params.id },
+      where: { spaceId: id },
       include: {
         knowledge: {
           include: {
