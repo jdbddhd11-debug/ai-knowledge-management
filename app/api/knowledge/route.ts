@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { KnowledgeService } from "@/lib/services/knowledge.service";
 
 export async function GET() {
   try {
@@ -111,29 +112,25 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { title, content, type, spaceIds } = body;
 
-    if (!content || !type) {
+    if (!content) {
       return NextResponse.json(
-        { error: "内容和类型不能为空" },
+        { error: "内容不能为空" },
         { status: 400 }
       );
     }
 
-    const knowledgeItem = await prisma.knowledgeItem.create({
-      data: {
-        title: title || null,
-        type,
-        content,
-        userId: userId,
-        spaces: spaceIds && spaceIds.length > 0
-          ? {
-              create: spaceIds.map((spaceId: string) => ({
-                space: {
-                  connect: { id: spaceId },
-                },
-              })),
-            }
-          : undefined,
-      },
+    // Use KnowledgeService for stable creation pipeline
+    const knowledgeService = new KnowledgeService(prisma);
+
+    const knowledgeItem = await knowledgeService.createFromText({
+      userId,
+      text: content,
+      type: type || "text",
+    });
+
+    // Fetch the complete item with relations
+    const itemWithSpaces = await prisma.knowledgeItem.findUnique({
+      where: { id: knowledgeItem.id },
       include: {
         spaces: {
           include: {
@@ -146,8 +143,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       data: {
-        ...knowledgeItem,
-        spaces: knowledgeItem.spaces.map((ks) => ks.space),
+        ...itemWithSpaces,
+        spaces: itemWithSpaces?.spaces.map((ks) => ks.space) ?? [],
       },
     });
   } catch (error) {
